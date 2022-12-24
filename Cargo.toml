@@ -1,0 +1,27 @@
+[package]
+name = "hello_world"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+# Enable a small amount of optimization in debug mode
+[profile.dev]
+opt-level = 1
+
+# Enable high optimizations for dependencies (incl. Bevy), but not for our code:
+[profile.dev.package."*"]
+opt-level = 3
+
+
+[dependencies]
+bevy = { version = "0.9.1", features = ["dds", "ktx2", "zstd", "dynamic"] }
+rand = "0.8.5"
+bevy_rapier3d = "0.19.0"
+bevy_fps_controller = { git = "https://github.com/qhdwight/bevy_fps_controller.git", branch = "fix-pitch-dependent-movement" }
+noise = "0.8.2"
+block-mesh = { git = "https://github.com/bonsairobo/block-mesh-rs" }
+bevy_common_assets = { version = "0.4.0", features = ["json"] }
+serde = "1.0.150"
+bevy_prototype_debug_lines = { version = "0.9", features = ["3d"] }
+iyes_loopless = "0.9.1"
