@@ -7,17 +7,21 @@ use bevy::{
 };
 
 
-use noise::{Fbm, Perlin};
+use noise::{Fbm, OpenSimplex};
 use bevy_rapier3d::prelude::*;
 use std::collections::HashMap;
 use bevy::asset::LoadState;
+
+
+use bevy::render::view::NoFrustumCulling;
 
 use noise::utils::{NoiseMapBuilder, PlaneMapBuilder};
 
 use block_mesh::ndshape::{ConstShape, ConstShape3u32};
 use block_mesh::{visible_block_faces, MergeVoxel, UnitQuadBuffer, Voxel, VoxelVisibility, RIGHT_HANDED_Y_UP_CONFIG, OrientedBlockFace};
-use rand::Rng;
+
 use bevy_common_assets::json::JsonAssetPlugin;
+use crate::DigEvent;
 
 
 const CHUNKS_COUNT_X: i32 = 32;
@@ -25,6 +29,8 @@ const CHUNKS_COUNT_Y: i32 = 32;
 const CHUNKS_COUNT_Z: i32 = 32;
 
 const CHUNK_SIZE: i32 = 32;
+
+type SampleShape = ConstShape3u32<34, 34, 34>;
 
 pub struct WorldPlugin;
 
@@ -34,6 +40,7 @@ impl Plugin for WorldPlugin {
             .add_plugin(JsonAssetPlugin::<TextureAtlas>::new(&["json"]))
             .add_startup_system(load_atlas)
             .add_system(asset_loaded)
+            .add_system(dig_event_handler)
         // .add_enter_system(GameState::LoadingBefore, load_atlas)
         // .add_enter_system(GameState::Loading, generate_world)
         ;
@@ -88,13 +95,13 @@ struct Cube;
 struct AtlasLoading {
     loaded: bool,
     handle: TextureAtlasHandle,
+    atlas: Option<TextureAtlas>,
 }
 
 fn load_atlas(asset_server: Res<AssetServer>, mut commands: Commands) {
     let handle = TextureAtlasHandle(asset_server.load("textures/spritesheet.json"));
 
-    commands.insert_resource(handle.clone());
-    commands.insert_resource(AtlasLoading { handle, loaded: false })
+    commands.insert_resource(AtlasLoading { handle, loaded: false, atlas: None })
 }
 
 
@@ -112,6 +119,7 @@ fn asset_loaded(
         if let Some(atlas) = atlases.remove(atlas_loading.handle.0.id()) {
             generate_world(commands, asset_server, meshes, materials, &atlas);
 
+            atlas_loading.atlas = Some(atlas);
             atlas_loading.loaded = true;
         }
     }
@@ -125,25 +133,29 @@ fn generate_world(mut commands: Commands,
     let texture_handle = asset_server.load("textures/spritesheet.png");
 
     let material_handle = materials.add(StandardMaterial {
-        base_color_texture: Some(texture_handle.clone()),
+        base_color_texture: Some(texture_handle),
         alpha_mode: AlphaMode::Opaque,
         perceptual_roughness: 1.0,
         ..default()
     });
 
-    let fbm = Fbm::<Perlin>::default();
-    let builder = PlaneMapBuilder::<_, 2>::new(fbm)
+    let fbm = Fbm::<OpenSimplex>::default();
+    let builder = PlaneMapBuilder::<_, 2>::new(fbm.clone())
         .set_size((CHUNK_SIZE * CHUNKS_COUNT_X) as usize, (CHUNK_SIZE * CHUNKS_COUNT_Z) as usize)
         .build();
 
-    let max_height_above_surface = 50.0;
+    let biome_builder = PlaneMapBuilder::<_, 2>::new(fbm)
+        .set_size((CHUNK_SIZE * CHUNKS_COUNT_X) as usize, (CHUNK_SIZE * CHUNKS_COUNT_Z) as usize)
+        .build();
+
+    let max_height_above_surface = 20.0;
 
     let around = 2;
 
     for current_chunk_x in CHUNKS_COUNT_X / 2 - around..CHUNKS_COUNT_X / 2 + around {
         for current_chunk_z in CHUNKS_COUNT_Z / 2 - around..CHUNKS_COUNT_Z / 2 + around {
             for current_chunk_y in CHUNKS_COUNT_Y / 2 - around..CHUNKS_COUNT_Y / 2 + around {
-                let mut samples = [EMPTY; SampleShape::SIZE as usize];
+                let mut samples = Vec::with_capacity(SampleShape::SIZE as usize);
                 for i in 0u32..(SampleShape::SIZE) {
                     let coords = SampleShape::delinearize(i);
                     let x = current_chunk_x * CHUNK_SIZE + coords[0] as i32;
@@ -156,11 +168,10 @@ fn generate_world(mut commands: Commands,
                     let voxel_filled = y < height.round() as i32;
 
                     let voxel_type = if voxel_filled {
-                        // let mut rng = rand::thread_rng();
-                        // [VoxelType::Dirt, VoxelType::Grass, VoxelType::Stone][rng.gen_range(0..3)]
-                        if noize_height < -10.0 {
+                        let biome_value = biome_builder.get_value(x as usize, z as usize);
+                        if biome_value < -0.2 {
                             VoxelType::Dirt
-                        } else if noize_height > -5.0 {
+                        } else if biome_value > 0.2 {
                             VoxelType::Stone
                         } else {
                             VoxelType::Grass
@@ -169,11 +180,10 @@ fn generate_world(mut commands: Commands,
                         VoxelType::Empty
                     };
 
-                    // println!("Voxel filled {:?} for height {}", voxel_type, noize_height);
-                    samples[i as usize] = MaterialVoxel(voxel_type);
+                    samples.push(MaterialVoxel(voxel_type));
                 }
 
-                let (simple_mesh, generated) = generate_simple_mesh(&samples, &atlas);
+                let (simple_mesh, generated) = generate_simple_mesh(&samples, atlas);
 
                 if generated > 0 {
                     spawn_pbr(
@@ -182,9 +192,10 @@ fn generate_world(mut commands: Commands,
                         simple_mesh,
                         material_handle.clone(),
                         Transform::from_translation(Vec3::new(
-                            ((current_chunk_x - CHUNK_SIZE / 2) * CHUNKS_COUNT_X) as f32,
-                            ((current_chunk_y - CHUNK_SIZE / 2) * CHUNKS_COUNT_Y) as f32,
-                            ((current_chunk_z - CHUNK_SIZE / 2) * CHUNKS_COUNT_Z) as f32)),
+                            ((current_chunk_x - CHUNK_SIZE / 2) * CHUNK_SIZE) as f32,
+                            ((current_chunk_y - CHUNK_SIZE / 2) * CHUNK_SIZE) as f32,
+                            ((current_chunk_z - CHUNK_SIZE / 2) * CHUNK_SIZE) as f32)),
+                        samples,
                     );
                 }
             }
@@ -193,7 +204,55 @@ fn generate_world(mut commands: Commands,
 }
 
 
-type SampleShape = ConstShape3u32<34, 34, 34>;
+#[derive(Component)]
+struct ChunkInfo {
+    samples: Vec<MaterialVoxel>,
+}
+
+fn dig_event_handler(
+    query: Query<(Entity, &ChunkInfo, &Transform)>,
+    mut commands: Commands,
+    atlas_loading: Res<AtlasLoading>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut ev: EventReader<DigEvent>,
+) {
+
+    if let Some(atlas) = &atlas_loading.atlas {
+        for ev in ev.iter() {
+            println!("Handle event {}", ev.world_position);
+            for (entity, chunk, transform) in query.iter() {
+                let position = voxel_position_from_world(transform.translation, ev.world_position);
+
+                if !(position.x >= 0.0 && position.x <= 33.0 &&
+                    position.y >= 0.0 && position.y <= 33.0 &&
+                    position.z >= 0.0 && position.z <= 33.0) {
+                    continue;
+                }
+
+                println!("Must update chunk! {} trans={}", position, transform.translation);
+                let mut samples = chunk.samples.clone();
+                let voxel_index = SampleShape::linearize(position.as_uvec3().to_array());
+
+                samples[voxel_index as usize] = EMPTY;
+
+                let (simple_mesh, generated) = generate_simple_mesh(&samples, atlas);
+                let mesh_handle = meshes.add(simple_mesh.clone());
+
+                if generated > 0 {
+                    commands.entity(entity)
+                        .insert(mesh_handle)
+                        .insert(ChunkInfo { samples })
+                        .insert(Collider::from_bevy_mesh(&simple_mesh, &ComputedColliderShape::TriMesh).unwrap());
+                }
+            }
+        }
+    }
+
+}
+
+fn voxel_position_from_world(chunk_translation: Vec3, world_position: Vec3) -> Vec3 {
+    (world_position - chunk_translation).floor()
+}
 
 fn generate_simple_mesh(
     samples: &[MaterialVoxel],
@@ -203,7 +262,7 @@ fn generate_simple_mesh(
 
     let mut buffer = UnitQuadBuffer::new();
     visible_block_faces(
-        &samples,
+        samples,
         &SampleShape {},
         [0; 3],
         [33; 3],
@@ -265,58 +324,32 @@ fn face_to_voxel_type(samples: &[MaterialVoxel], face: OrientedBlockFace, quad_p
 
     let block_center = quad_center - normal / 2.0;
 
-    let voxel_index = SampleShape::linearize([
-        block_center.x.floor() as u32,
-        block_center.y.floor() as u32,
-        block_center.z.floor() as u32]);
+    let voxel_index = SampleShape::linearize(block_center.floor().as_uvec3().to_array());
 
     samples[voxel_index as usize].0
 }
 
 fn voxel_texture_name(normal: Vec3, voxel_type: VoxelType) -> &'static str {
-    let mut rng = rand::thread_rng();
+    // let mut rng = rand::thread_rng();
     match voxel_type
     {
         VoxelType::Grass => {
             if normal.y == 1.0 {
-                let variants = [
-                    "grass_block_top.png",
-                    "grass_block_top1.png",
-                    "grass_block_top2.png"];
-                variants[rng.gen_range(0..variants.len())]
+                "grass_block_top.png"
             } else if normal.y == -1.0 {
-                "empty.png"
+                "dirt.png"
             } else {
                 "grass_block_side.png"
             }
         }
         VoxelType::Dirt => {
-            let variants = [
-                "coarse_dirt.png",
-                "coarse_dirt1.png",
-                "coarse_dirt2.png",
-                "coarse_dirt3.png",
-                "coarse_dirt4.png",
-                "coarse_dirt5.png",
-                "coarse_dirt6.png"];
-            variants[rng.gen_range(0..variants.len())]
+            "dirt.png"
         }
         VoxelType::Stone => {
-            let variants = [
-                "cobblestone.png",
-                "cobblestone1.png",
-                "cobblestone2.png",
-                "cobblestone3.png",
-                "cobblestone4.png",
-                "cobblestone5.png",
-                "cobblestone6.png",
-                "cobblestone7.png",
-                "cobblestone8.png",
-                "cobblestone9.png"];
-            variants[rng.gen_range(0..variants.len())]
+            "stone.png"
         }
         VoxelType::Empty => {
-            "empty.png"
+            "debug.png"
         }
     }
 }
@@ -336,6 +369,7 @@ fn spawn_pbr(
     mesh: Mesh,
     material_handle: Handle<StandardMaterial>,
     transform: Transform,
+    samples: Vec<MaterialVoxel>,
 ) {
     let handle = meshes.add(mesh.clone());
     commands.spawn(PbrBundle {
@@ -343,8 +377,12 @@ fn spawn_pbr(
         material: material_handle,
         transform,
         ..Default::default()
-    }).insert(RigidBody::Fixed)
-        .insert(Collider::from_bevy_mesh(&mesh, &ComputedColliderShape::TriMesh).unwrap());
+    })
+        .insert(RigidBody::Fixed)
+        .insert(Collider::from_bevy_mesh(&mesh, &ComputedColliderShape::TriMesh).unwrap())
+        // TODO: why chunks doesn't render without NoFrustumCulling ?
+        .insert(NoFrustumCulling)
+        .insert(ChunkInfo { samples });
 }
 
 #[derive(Clone, Copy, Eq, PartialEq, Debug)]

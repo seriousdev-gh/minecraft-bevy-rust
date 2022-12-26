@@ -7,6 +7,7 @@ mod ui;
 use bevy_prototype_debug_lines::*;
 use bevy_fps_controller::controller::*;
 use bevy::{prelude::*};
+use bevy::core_pipeline::fxaa::Fxaa;
 
 use bevy::window::CursorGrabMode;
 use bevy_rapier3d::prelude::*;
@@ -24,12 +25,6 @@ pub enum GameState {
     InGame,
 }
 
-#[derive(Component)]
-struct Movable;
-
-#[derive(Component)]
-struct Ground;
-
 pub fn main() {
     App::new()
         .insert_resource(Msaa { samples: 1 })
@@ -44,6 +39,7 @@ pub fn main() {
         // .add_plugin(RapierDebugRenderPlugin::default())
         .add_enter_system(GameState::InGame, setup_physics)
         .add_enter_system(GameState::InGame, setup)
+        .add_event::<DigEvent>()
         .add_system_set(
             ConditionSet::new()
                 .run_in_state(GameState::InGame)
@@ -61,18 +57,6 @@ fn setup_physics(mut commands: Commands,
                  _asset_server: Res<AssetServer>,
                  _meshes: ResMut<Assets<Mesh>>,
                  _materials: ResMut<Assets<StandardMaterial>>) {
-
-    // commands.spawn(
-    //     DirectionalLightBundle {
-    //         transform: Transform::from_xyz(0.0,0.0,0.0).looking_at(Vec3::new(-0.1, -0.5, -0.2), Vec3::Y),
-    //         directional_light: DirectionalLight {
-    //             shadows_enabled: true,
-    //             illuminance: 10000.0,
-    //             ..default()
-    //         },
-    //         ..default()
-    //     }
-    // );
 
     commands.spawn((
         Collider::capsule(Vec3::Y * 0.5, Vec3::Y * 1.5, 0.5),
@@ -140,7 +124,7 @@ fn setup_physics(mut commands: Commands,
             ..default()
         },
         RenderPlayer(0),
-    ));
+    )).insert(Fxaa::default());
     // commands.spawn((
     //     Camera3dBundle {
     //         camera_3d: Camera3d {
@@ -178,7 +162,7 @@ fn update_system(
         1
     };
 
-    println!("Change player to {}", enabled_id);
+    println!("Change player to {enabled_id}");
 
     for (mut controller, player_id) in controllers.iter_mut() {
         if player_id.0 == enabled_id {
@@ -197,11 +181,18 @@ fn update_system(
     }
 }
 
-/* Cast a ray inside of a system. */
+struct DigEvent {
+    entity: Entity,
+    world_position: Vec3
+}
+
+const DIG_DISTANCE: Real = 4.0;
+
 fn cast_ray(rapier_context: Res<RapierContext>,
             controllers: Query<(&Transform, &Collider, &FpsController)>,
             mut lines: ResMut<DebugLines>,
-            btn: Res<Input<MouseButton>>,) {
+            btn: Res<Input<MouseButton>>,
+            mut ev: EventWriter<DigEvent>) {
     if !btn.just_pressed(MouseButton::Left) { return }
 
     for (transform, collider, controller) in controllers.iter() {
@@ -210,21 +201,22 @@ fn cast_ray(rapier_context: Res<RapierContext>,
             let ray_pos = transform.translation + Vec3::Y * camera_height;
             let quat = Quat::from_euler(EulerRot::ZYX, 0.0, controller.yaw, controller.pitch);
             let ray_dir = -quat.mul_vec3(Vec3::Z);
-            let max_toi = 3.0;
+            let max_toi = DIG_DISTANCE;
             let solid = false;
             let filter = QueryFilter { flags: QueryFilterFlags::ONLY_FIXED, ..default() };
-
-            lines.line_colored(ray_pos, ray_pos + ray_dir * max_toi, 0.0, Color::WHITE);
 
             if let Some((entity, toi)) = rapier_context.cast_ray(
                 ray_pos, ray_dir, max_toi, solid, filter,
             ) {
                 let hit_point = ray_pos + ray_dir * toi;
-                println!("Entity {:?} hit at point {}", entity, hit_point);
+                // try to move hit point inside voxel
+                let inside_hit_point = ray_pos + ray_dir * (toi * 1.1);
 
                 lines.line_colored(hit_point - Vec3::X * 0.5, hit_point + Vec3::X * 0.5, 0.5, Color::RED);
                 lines.line_colored(hit_point - Vec3::Y * 0.5, hit_point + Vec3::Y * 0.5, 0.5, Color::GREEN);
                 lines.line_colored(hit_point - Vec3::Z * 0.5, hit_point + Vec3::Z * 0.5, 0.5, Color::BLUE);
+
+                ev.send(DigEvent { entity, world_position: inside_hit_point } );
             }
         }
     }

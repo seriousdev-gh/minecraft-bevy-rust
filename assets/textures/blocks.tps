@@ -174,27 +174,9 @@
         <key>individualSpriteSettings</key>
         <map type="IndividualSpriteSettingsMap">
             <key type="filename">blocks/coarse_dirt.png</key>
-            <key type="filename">blocks/coarse_dirt1.png</key>
-            <key type="filename">blocks/coarse_dirt2.png</key>
-            <key type="filename">blocks/coarse_dirt3.png</key>
-            <key type="filename">blocks/coarse_dirt4.png</key>
-            <key type="filename">blocks/coarse_dirt5.png</key>
-            <key type="filename">blocks/coarse_dirt6.png</key>
             <key type="filename">blocks/cobblestone.png</key>
-            <key type="filename">blocks/cobblestone1.png</key>
-            <key type="filename">blocks/cobblestone2.png</key>
-            <key type="filename">blocks/cobblestone3.png</key>
-            <key type="filename">blocks/cobblestone4.png</key>
-            <key type="filename">blocks/cobblestone5.png</key>
-            <key type="filename">blocks/cobblestone6.png</key>
-            <key type="filename">blocks/cobblestone7.png</key>
-            <key type="filename">blocks/cobblestone8.png</key>
-            <key type="filename">blocks/cobblestone9.png</key>
-            <key type="filename">blocks/empty.png</key>
             <key type="filename">blocks/grass_block_side.png</key>
             <key type="filename">blocks/grass_block_top.png</key>
-            <key type="filename">blocks/grass_block_top1.png</key>
-            <key type="filename">blocks/grass_block_top2.png</key>
             <struct type="IndividualSpriteSettings">
                 <key>pivotPoint</key>
                 <point_f>0.5,0.5</point_f>
@@ -206,6 +188,28 @@
                 <rect>4,4,8,8</rect>
                 <key>scale9Paddings</key>
                 <rect>4,4,8,8</rect>
+                <key>scale9FromFile</key>
+                <false/>
+            </struct>
+            <key type="filename">blocks/debug.png</key>
+            <key type="filename">blocks/debug2.png</key>
+            <key type="filename">blocks/dirt.png</key>
+            <key type="filename">blocks/grass.png</key>
+            <key type="filename">blocks/grass_block_side_overlay.png</key>
+            <key type="filename">blocks/grass_block_snow.png</key>
+            <key type="filename">blocks/sand.png</key>
+            <key type="filename">blocks/stone.png</key>
+            <struct type="IndividualSpriteSettings">
+                <key>pivotPoint</key>
+                <point_f>0.5,0.5</point_f>
+                <key>spriteScale</key>
+                <double>1</double>
+                <key>scale9Enabled</key>
+                <false/>
+                <key>scale9Borders</key>
+                <rect>8,8,16,16</rect>
+                <key>scale9Paddings</key>
+                <rect>8,8,16,16</rect>
                 <key>scale9FromFile</key>
                 <false/>
             </struct>
