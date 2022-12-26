@@ -181,10 +181,16 @@ fn update_system(
     }
 }
 
+enum DigEventType {
+    Build,
+    Dig
+}
+
 struct DigEvent {
-    entity: Entity,
+    event_type: DigEventType,
     world_position: Vec3
 }
+
 
 const DIG_DISTANCE: Real = 4.0;
 
@@ -193,7 +199,7 @@ fn cast_ray(rapier_context: Res<RapierContext>,
             mut lines: ResMut<DebugLines>,
             btn: Res<Input<MouseButton>>,
             mut ev: EventWriter<DigEvent>) {
-    if !btn.just_pressed(MouseButton::Left) { return }
+    if !(btn.just_pressed(MouseButton::Left) || btn.just_pressed(MouseButton::Right)) { return }
 
     for (transform, collider, controller) in controllers.iter() {
         if let Some(capsule) = collider.as_capsule() {
@@ -210,13 +216,18 @@ fn cast_ray(rapier_context: Res<RapierContext>,
             ) {
                 let hit_point = ray_pos + ray_dir * toi;
                 // try to move hit point inside voxel
-                let inside_hit_point = ray_pos + ray_dir * (toi * 1.1);
 
                 lines.line_colored(hit_point - Vec3::X * 0.5, hit_point + Vec3::X * 0.5, 0.5, Color::RED);
                 lines.line_colored(hit_point - Vec3::Y * 0.5, hit_point + Vec3::Y * 0.5, 0.5, Color::GREEN);
                 lines.line_colored(hit_point - Vec3::Z * 0.5, hit_point + Vec3::Z * 0.5, 0.5, Color::BLUE);
 
-                ev.send(DigEvent { entity, world_position: inside_hit_point } );
+                if btn.just_pressed(MouseButton::Left) {
+                    let inside_hit_point = ray_pos + ray_dir * (toi * 1.1);
+                    ev.send(DigEvent { event_type: DigEventType::Dig, world_position: inside_hit_point });
+                } else if btn.just_pressed(MouseButton::Right)  {
+                    let outside_hit_point = ray_pos + ray_dir * (toi * 0.9);
+                    ev.send(DigEvent { event_type: DigEventType::Build, world_position: outside_hit_point });
+                }
             }
         }
     }

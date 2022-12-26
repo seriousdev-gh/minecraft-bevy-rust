@@ -21,7 +21,7 @@ use block_mesh::ndshape::{ConstShape, ConstShape3u32};
 use block_mesh::{visible_block_faces, MergeVoxel, UnitQuadBuffer, Voxel, VoxelVisibility, RIGHT_HANDED_Y_UP_CONFIG, OrientedBlockFace};
 
 use bevy_common_assets::json::JsonAssetPlugin;
-use crate::DigEvent;
+use crate::{DigEvent, DigEventType};
 
 
 const CHUNKS_COUNT_X: i32 = 32;
@@ -210,17 +210,16 @@ struct ChunkInfo {
 }
 
 fn dig_event_handler(
-    query: Query<(Entity, &ChunkInfo, &Transform)>,
+    mut query: Query<(Entity, &mut ChunkInfo, &Transform)>,
     mut commands: Commands,
     atlas_loading: Res<AtlasLoading>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut ev: EventReader<DigEvent>,
 ) {
-
     if let Some(atlas) = &atlas_loading.atlas {
         for ev in ev.iter() {
             println!("Handle event {}", ev.world_position);
-            for (entity, chunk, transform) in query.iter() {
+            for (entity, mut chunk, transform) in query.iter_mut() {
                 let position = voxel_position_from_world(transform.translation, ev.world_position);
 
                 if !(position.x >= 0.0 && position.x <= 33.0 &&
@@ -230,18 +229,22 @@ fn dig_event_handler(
                 }
 
                 println!("Must update chunk! {} trans={}", position, transform.translation);
-                let mut samples = chunk.samples.clone();
+                // let mut samples = chunk.samples;
                 let voxel_index = SampleShape::linearize(position.as_uvec3().to_array());
 
-                samples[voxel_index as usize] = EMPTY;
+                // TODO: Do not build if the player will be inside the block.
+                chunk.samples[voxel_index as usize] = match ev.event_type {
+                    DigEventType::Dig => EMPTY,
+                    DigEventType::Build => MaterialVoxel(VoxelType::Stone)
+                };
 
-                let (simple_mesh, generated) = generate_simple_mesh(&samples, atlas);
+                let (simple_mesh, generated) = generate_simple_mesh(&chunk.samples, atlas);
                 let mesh_handle = meshes.add(simple_mesh.clone());
 
                 if generated > 0 {
                     commands.entity(entity)
                         .insert(mesh_handle)
-                        .insert(ChunkInfo { samples })
+                        // .insert(ChunkInfo { samples })
                         .insert(Collider::from_bevy_mesh(&simple_mesh, &ComputedColliderShape::TriMesh).unwrap());
                 }
             }
