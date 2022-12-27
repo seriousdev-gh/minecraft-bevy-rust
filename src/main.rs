@@ -191,7 +191,6 @@ struct DigEvent {
     world_position: Vec3
 }
 
-
 const DIG_DISTANCE: Real = 4.0;
 
 fn cast_ray(rapier_context: Res<RapierContext>,
@@ -215,7 +214,6 @@ fn cast_ray(rapier_context: Res<RapierContext>,
                 ray_pos, ray_dir, max_toi, solid, filter,
             ) {
                 let hit_point = ray_pos + ray_dir * toi;
-                // try to move hit point inside voxel
 
                 lines.line_colored(hit_point - Vec3::X * 0.5, hit_point + Vec3::X * 0.5, 0.5, Color::RED);
                 lines.line_colored(hit_point - Vec3::Y * 0.5, hit_point + Vec3::Y * 0.5, 0.5, Color::GREEN);
@@ -226,7 +224,21 @@ fn cast_ray(rapier_context: Res<RapierContext>,
                     ev.send(DigEvent { event_type: DigEventType::Dig, world_position: inside_hit_point });
                 } else if btn.just_pressed(MouseButton::Right)  {
                     let outside_hit_point = ray_pos + ray_dir * (toi * 0.9);
-                    ev.send(DigEvent { event_type: DigEventType::Build, world_position: outside_hit_point });
+
+                    let shape = Collider::cuboid(0.5, 0.5, 0.5);
+                    let shape_pos = outside_hit_point.floor() + Vec3::new(0.5, 0.5, 0.5);
+                    let shape_rot = Quat::IDENTITY;
+                    let filter = QueryFilter::only_dynamic();
+
+                    let mut allow = true;
+                    rapier_context.intersections_with_shape(
+                        shape_pos, shape_rot, &shape, filter, |entity| {
+                            allow = false;
+                            true
+                        });
+                    if allow {
+                        ev.send(DigEvent { event_type: DigEventType::Build, world_position: outside_hit_point });
+                    }
                 }
             }
         }
