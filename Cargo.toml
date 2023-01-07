@@ -25,3 +25,4 @@ bevy_common_assets = { version = "0.4.0", features = ["json"] }
 serde = "1.0.150"
 bevy_prototype_debug_lines = { version = "0.9", features = ["3d"] }
 iyes_loopless = "0.9.1"
+fast_poisson = { version = "0.5.2", features=["single_precision"] }

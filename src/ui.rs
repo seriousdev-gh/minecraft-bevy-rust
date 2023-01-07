@@ -34,19 +34,19 @@ struct FpsText;
 
 fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     // Camera
-    commands.spawn(Camera2dBundle {
-        camera_2d: Camera2d {
-            // Don't draw a clear color on top of the 3d stuff
-            clear_color: ClearColorConfig::None,
-            ..default()
-        },
-        camera: Camera {
-            // renders after / on top of the main camera
-            priority: 10,
-            ..default()
-        },
-        ..default()
-    });
+    // commands.spawn(Camera2dBundle {
+    //     camera_2d: Camera2d {
+    //         // Don't draw a clear color on top of the 3d stuff
+    //         clear_color: ClearColorConfig::None,
+    //         ..default()
+    //     },
+    //     camera: Camera {
+    //         // renders after / on top of the main camera
+    //         priority: 10,
+    //         ..default()
+    //     },
+    //     ..default()
+    // });
 
     // root node
     commands

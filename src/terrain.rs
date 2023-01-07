@@ -6,10 +6,12 @@ use bevy::{
     },
 };
 
+use fast_poisson::Poisson2D;
 
-use noise::{Fbm, OpenSimplex};
+use noise::{Fbm, OpenSimplex, Worley};
 use bevy_rapier3d::prelude::*;
 use std::collections::HashMap;
+use std::time::SystemTime;
 use bevy::asset::LoadState;
 
 
@@ -21,6 +23,7 @@ use block_mesh::ndshape::{ConstShape, ConstShape3u32};
 use block_mesh::{visible_block_faces, MergeVoxel, UnitQuadBuffer, Voxel, VoxelVisibility, RIGHT_HANDED_Y_UP_CONFIG, OrientedBlockFace};
 
 use bevy_common_assets::json::JsonAssetPlugin;
+use rand::Rng;
 use crate::{DigEvent, DigEventType};
 
 
@@ -29,6 +32,11 @@ const CHUNKS_COUNT_Y: i32 = 32;
 const CHUNKS_COUNT_Z: i32 = 32;
 
 const CHUNK_SIZE: i32 = 32;
+
+
+const VISIBLE_CHUNK_DISTANCE: i32 = 1;
+const CHUNKS_COUNT_DIM: i32 = VISIBLE_CHUNK_DISTANCE * 2 + 1;
+const BUILDER_HEIGHT_SCALE: f32 = 20.0;
 
 type SampleShape = ConstShape3u32<34, 34, 34>;
 
@@ -125,6 +133,7 @@ fn asset_loaded(
     }
 }
 
+
 fn generate_world(mut commands: Commands,
                   asset_server: Res<AssetServer>,
                   mut meshes: ResMut<Assets<Mesh>>,
@@ -134,11 +143,14 @@ fn generate_world(mut commands: Commands,
 
     let material_handle = materials.add(StandardMaterial {
         base_color_texture: Some(texture_handle),
-        alpha_mode: AlphaMode::Opaque,
+        alpha_mode: AlphaMode::Mask(0.5),
+        double_sided: true,
+        cull_mode: None,
         perceptual_roughness: 1.0,
         ..default()
     });
 
+    let now = SystemTime::now();
     let fbm = Fbm::<OpenSimplex>::default();
     let builder = PlaneMapBuilder::<_, 2>::new(fbm.clone())
         .set_size((CHUNK_SIZE * CHUNKS_COUNT_X) as usize, (CHUNK_SIZE * CHUNKS_COUNT_Z) as usize)
@@ -148,27 +160,32 @@ fn generate_world(mut commands: Commands,
         .set_size((CHUNK_SIZE * CHUNKS_COUNT_X) as usize, (CHUNK_SIZE * CHUNKS_COUNT_Z) as usize)
         .build();
 
-    let max_height_above_surface = 20.0;
+    let mut fbm2 = Fbm::<Worley>::default();
+    fbm2.frequency = 0.01;
 
-    let around = 2;
+    let mut chunks: HashMap<[i32; 3], Vec<MaterialVoxel>> = HashMap::new();
 
-    for current_chunk_x in CHUNKS_COUNT_X / 2 - around..CHUNKS_COUNT_X / 2 + around {
-        for current_chunk_z in CHUNKS_COUNT_Z / 2 - around..CHUNKS_COUNT_Z / 2 + around {
-            for current_chunk_y in CHUNKS_COUNT_Y / 2 - around..CHUNKS_COUNT_Y / 2 + around {
+    println!("Noise gen time: {}ms", now.elapsed().unwrap().as_millis());
+    let now = SystemTime::now();
+
+    for current_chunk_x in -VISIBLE_CHUNK_DISTANCE..=VISIBLE_CHUNK_DISTANCE {
+        for current_chunk_y in -VISIBLE_CHUNK_DISTANCE..=VISIBLE_CHUNK_DISTANCE {
+            for current_chunk_z in -VISIBLE_CHUNK_DISTANCE..=VISIBLE_CHUNK_DISTANCE {
                 let mut samples = Vec::with_capacity(SampleShape::SIZE as usize);
+
                 for i in 0u32..(SampleShape::SIZE) {
-                    let coords = SampleShape::delinearize(i);
-                    let x = current_chunk_x * CHUNK_SIZE + coords[0] as i32;
-                    let y = current_chunk_y * CHUNK_SIZE + coords[1] as i32;
-                    let z = current_chunk_z * CHUNK_SIZE + coords[2] as i32;
-                    let noize_height = builder.get_value(x as usize, z as usize) * max_height_above_surface;
+                    let local_position_in_chunk = SampleShape::delinearize(i);
+                    let builder_world_x = (current_chunk_x + CHUNKS_COUNT_X / 2) * CHUNK_SIZE + local_position_in_chunk[0] as i32;
+                    let builder_world_y = (current_chunk_y + CHUNKS_COUNT_Y / 2) * CHUNK_SIZE + local_position_in_chunk[1] as i32;
+                    let builder_world_z = (current_chunk_z + CHUNKS_COUNT_Z / 2) * CHUNK_SIZE + local_position_in_chunk[2] as i32;
 
-                    let height = noize_height + (CHUNKS_COUNT_Y * CHUNK_SIZE / 2) as f64;
+                    let height = builder.get_value(builder_world_x as usize - 1, builder_world_z as usize - 1) as f32 * BUILDER_HEIGHT_SCALE + (CHUNKS_COUNT_Y * CHUNK_SIZE / 2) as f32;
+                    let biome_value = biome_builder.get_value(builder_world_x as usize - 1, builder_world_z as usize - 1);
 
-                    let voxel_filled = y < height.round() as i32;
+                    let under_surface = builder_world_y < height.round() as i32;
+                    let surface = builder_world_y == height.round() as i32;
 
-                    let voxel_type = if voxel_filled {
-                        let biome_value = biome_builder.get_value(x as usize, z as usize);
+                    let voxel_type = if surface {
                         if biome_value < -0.2 {
                             VoxelType::Dirt
                         } else if biome_value > 0.2 {
@@ -176,6 +193,15 @@ fn generate_world(mut commands: Commands,
                         } else {
                             VoxelType::Grass
                         }
+                    } else if under_surface {
+                        // let val = fbm2.get([x as f64, y as f64, z as f64]);
+                        // if val > 0.8 {
+                            VoxelType::Sand
+                        // } else if val > 0.6 {
+                        //     VoxelType::Stone
+                        // } else {
+                        //     VoxelType::Empty
+                        // }
                     } else {
                         VoxelType::Empty
                     };
@@ -183,26 +209,100 @@ fn generate_world(mut commands: Commands,
                     samples.push(MaterialVoxel(voxel_type));
                 }
 
-                let (simple_mesh, generated) = generate_simple_mesh(&samples, atlas);
+                chunks.insert([current_chunk_x, current_chunk_y, current_chunk_z], samples);
+            }
+        }
+    }
 
-                if generated > 0 {
-                    spawn_pbr(
-                        &mut commands,
-                        &mut meshes,
-                        simple_mesh,
-                        material_handle.clone(),
-                        Transform::from_translation(Vec3::new(
-                            ((current_chunk_x - CHUNK_SIZE / 2) * CHUNK_SIZE) as f32,
-                            ((current_chunk_y - CHUNK_SIZE / 2) * CHUNK_SIZE) as f32,
-                            ((current_chunk_z - CHUNK_SIZE / 2) * CHUNK_SIZE) as f32)),
-                        samples,
-                    );
+    // Tree generation
+    let poisson = Poisson2D::new()
+        .with_dimensions([(CHUNKS_COUNT_DIM * CHUNK_SIZE) as f32, (CHUNKS_COUNT_DIM * CHUNK_SIZE) as f32], 6.0)
+        .generate();
+    for point in poisson {
+        let world_x = point[0].floor() - (VISIBLE_CHUNK_DISTANCE * CHUNK_SIZE) as f32;
+        let world_z = point[1].floor() - (VISIBLE_CHUNK_DISTANCE * CHUNK_SIZE) as f32;
+        let world_y = builder.get_value((world_x as i32 + CHUNKS_COUNT_X / 2 * CHUNK_SIZE) as usize, (world_z as i32 + CHUNKS_COUNT_Z / 2 * CHUNK_SIZE) as usize) as f32 * BUILDER_HEIGHT_SCALE;
+
+        generate_tree(Vec3::new(world_x, world_y.round(), world_z), &mut chunks);
+    }
+
+    println!("Fill time: {}ms", now.elapsed().unwrap().as_millis());
+    let now = SystemTime::now();
+
+    for (pos, samples) in chunks {
+        let (simple_mesh, generated) = generate_simple_mesh(&samples, atlas);
+
+        if generated > 0 {
+            spawn_pbr(
+                &mut commands,
+                &mut meshes,
+                simple_mesh,
+                material_handle.clone(),
+                Transform::from_translation(Vec3::new(
+                    (pos[0] * CHUNK_SIZE) as f32,
+                    (pos[1] * CHUNK_SIZE) as f32,
+                    (pos[2] * CHUNK_SIZE) as f32)),
+                samples,
+            );
+        }
+    }
+
+    println!("Mesh gen time: {}ms", now.elapsed().unwrap().as_millis());
+}
+
+fn generate_tree(origin: Vec3, chunks: &mut HashMap<[i32; 3], Vec<MaterialVoxel>>) {
+    match rand::thread_rng().gen_range(0..=1) {
+        0 => {
+            change_voxel(origin + Vec3::new(0.0, 4.0, 0.0), VoxelType::OakLeaves, chunks);
+            for x in -1..=1 {
+                for z in -1..=1 {
+                    change_voxel(origin + Vec3::new(x as f32, 3.0, z as f32), VoxelType::OakLeaves, chunks);
                 }
             }
+            for z in 0..=2 {
+                change_voxel(origin + Vec3::new(0.0, z as f32, 0.0), VoxelType::OakLog, chunks);
+            }
+        }
+        1 => {
+            change_voxel(origin + Vec3::new(0.0, 6.0, 0.0), VoxelType::OakLeaves, chunks);
+            for x in -1..=1 {
+                for z in -1..=1 {
+                    change_voxel(origin + Vec3::new(x as f32, 3.0, z as f32), VoxelType::OakLeaves, chunks);
+                    change_voxel(origin + Vec3::new(x as f32, 5.0, z as f32), VoxelType::OakLeaves, chunks);
+                }
+            }
+            for x in -2..=2 {
+                for z in -2..=2 {
+                    change_voxel(origin + Vec3::new(x as f32, 4.0, z as f32), VoxelType::OakLeaves, chunks);
+                }
+            }
+            for z in 0..=4 {
+                change_voxel(origin + Vec3::new(0.0, z as f32, 0.0), VoxelType::OakLog, chunks);
+            }
+        }
+        _ => {
+
         }
     }
 }
 
+fn change_voxel(world_point: Vec3, voxel_type: VoxelType, chunks: &mut HashMap<[i32; 3], Vec<MaterialVoxel>>) {
+    let chunk_position = [
+        (world_point.x / CHUNK_SIZE as f32).floor() as i32,
+        (world_point.y / CHUNK_SIZE as f32).floor() as i32,
+        (world_point.z / CHUNK_SIZE as f32).floor() as i32];
+    let samples = chunks.get_mut(&chunk_position);
+    if let Some(samples) = samples {
+
+        let voxel_x = (world_point.x - (chunk_position[0] * CHUNK_SIZE) as f32).floor() as u32;
+        let voxel_y = (world_point.y - (chunk_position[1] * CHUNK_SIZE) as f32).floor() as u32;
+        let voxel_z = (world_point.z - (chunk_position[2] * CHUNK_SIZE) as f32).floor() as u32;
+        let index = SampleShape::linearize([voxel_x + 1, voxel_y + 1, voxel_z + 1]);
+        samples[index as usize] = MaterialVoxel(voxel_type);
+    } else {
+        println!("Chunk not found {chunk_position:?}");
+    }
+}
 
 #[derive(Component)]
 struct ChunkInfo {
@@ -222,6 +322,8 @@ fn dig_event_handler(
             for (entity, mut chunk, transform) in query.iter_mut() {
                 let position = voxel_position_from_world(transform.translation, ev.world_position);
 
+                println!("Check pos! {position}");
+
                 if !(position.x >= 0.0 && position.x <= 33.0 &&
                     position.y >= 0.0 && position.y <= 33.0 &&
                     position.z >= 0.0 && position.z <= 33.0) {
@@ -232,10 +334,9 @@ fn dig_event_handler(
                 // let mut samples = chunk.samples;
                 let voxel_index = SampleShape::linearize(position.as_uvec3().to_array());
 
-                // TODO: Do not build if the player will be inside the block.
                 chunk.samples[voxel_index as usize] = match ev.event_type {
                     DigEventType::Dig => EMPTY,
-                    DigEventType::Build => MaterialVoxel(VoxelType::Stone)
+                    DigEventType::Build => MaterialVoxel(VoxelType::Cobblestone)
                 };
 
                 let (simple_mesh, generated) = generate_simple_mesh(&chunk.samples, atlas);
@@ -250,7 +351,6 @@ fn dig_event_handler(
             }
         }
     }
-
 }
 
 fn voxel_position_from_world(chunk_translation: Vec3, world_position: Vec3) -> Vec3 {
@@ -291,14 +391,18 @@ fn generate_simple_mesh(
             let voxel_type = face_to_voxel_type(samples, face, quad_positions);
 
             let default_color = [[1.0, 1.0, 1.0, 1.0]; 4];
-            let color = if voxel_type == VoxelType::Grass {
-                if normal.y == 1.0 {
-                    [[0.1, 0.8, 0.1, 1.0]; 4]
-                } else {
-                    default_color
+            let color = match voxel_type {
+                VoxelType::Grass => {
+                    if normal.y == 1.0 {
+                        [[0.1, 0.8, 0.1, 1.0]; 4]
+                    } else {
+                        default_color
+                    }
                 }
-            } else {
-                default_color
+                VoxelType::OakLeaves => {
+                    [[0.1, 0.8, 0.1, 1.0]; 4]
+                },
+                _ => default_color
             };
             colors.extend_from_slice(&color);
 
@@ -333,7 +437,6 @@ fn face_to_voxel_type(samples: &[MaterialVoxel], face: OrientedBlockFace, quad_p
 }
 
 fn voxel_texture_name(normal: Vec3, voxel_type: VoxelType) -> &'static str {
-    // let mut rng = rand::thread_rng();
     match voxel_type
     {
         VoxelType::Grass => {
@@ -353,6 +456,22 @@ fn voxel_texture_name(normal: Vec3, voxel_type: VoxelType) -> &'static str {
         }
         VoxelType::Empty => {
             "debug.png"
+        }
+        VoxelType::Sand => {
+            "sand.png"
+        }
+        VoxelType::OakLog => {
+            if normal.y == 1.0 || normal.y == -1.0 {
+                "oak_log_top.png"
+            } else {
+                "oak_log.png"
+            }
+        }
+        VoxelType::OakLeaves => {
+            "oak_leaves.png"
+        }
+        VoxelType::Cobblestone => {
+            "cobblestone.png"
         }
     }
 }
@@ -393,7 +512,11 @@ enum VoxelType {
     Empty,
     Grass,
     Stone,
+    Cobblestone,
     Dirt,
+    Sand,
+    OakLog,
+    OakLeaves,
 }
 
 #[derive(Clone, Copy, Eq, PartialEq)]
@@ -403,10 +526,10 @@ const EMPTY: MaterialVoxel = MaterialVoxel(VoxelType::Empty);
 
 impl Voxel for MaterialVoxel {
     fn get_visibility(&self) -> VoxelVisibility {
-        if *self == EMPTY {
-            VoxelVisibility::Empty
-        } else {
-            VoxelVisibility::Opaque
+        match self.0 {
+            VoxelType::Empty => VoxelVisibility::Empty,
+            VoxelType::OakLeaves => VoxelVisibility::Translucent,
+            _ => VoxelVisibility::Opaque
         }
     }
 }

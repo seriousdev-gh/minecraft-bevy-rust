@@ -37,7 +37,6 @@ pub fn main() {
         .add_plugin(DebugLinesPlugin::default())
         .add_plugin(RapierPhysicsPlugin::<NoUserData>::default())
         // .add_plugin(RapierDebugRenderPlugin::default())
-        .add_enter_system(GameState::InGame, setup_physics)
         .add_enter_system(GameState::InGame, setup)
         .add_event::<DigEvent>()
         .add_system_set(
@@ -53,13 +52,9 @@ pub fn main() {
 }
 
 
-fn setup_physics(mut commands: Commands,
-                 _asset_server: Res<AssetServer>,
-                 _meshes: ResMut<Assets<Mesh>>,
-                 _materials: ResMut<Assets<StandardMaterial>>) {
-
+fn setup(mut commands: Commands) {
     commands.spawn((
-        Collider::capsule(Vec3::Y * 0.5, Vec3::Y * 1.5, 0.5),
+        Collider::capsule(Vec3::Y * 0.5, Vec3::Y * 1.5, 0.45),
         ActiveEvents::COLLISION_EVENTS,
         Velocity::zero(),
         RigidBody::Dynamic,
@@ -68,7 +63,7 @@ fn setup_physics(mut commands: Commands,
         AdditionalMassProperties::Mass(1.0),
         GravityScale(0.0),
         Ccd { enabled: true }, // Prevent clipping when going fast
-        TransformBundle::from_transform(Transform::from_xyz(0.0, 25.0, 0.0)),
+        SpatialBundle::from_transform(Transform::from_xyz(0.0, 25.0, 0.0)),
         LogicalPlayer(0),
         FpsControllerInput {
             pitch: -TAU / 12.0,
@@ -84,34 +79,22 @@ fn setup_physics(mut commands: Commands,
             sensitivity: 0.002,
             ..default()
         }
-    ));
-    // commands.spawn((
-    //     Collider::capsule(Vec3::Y * 0.5, Vec3::Y * 1.5, 0.5),
-    //     ActiveEvents::COLLISION_EVENTS,
-    //     Velocity::zero(),
-    //     RigidBody::Dynamic,
-    //     Sleeping::disabled(),
-    //     LockedAxes::ROTATION_LOCKED,
-    //     AdditionalMassProperties::Mass(1.0),
-    //     GravityScale(0.0),
-    //     Ccd { enabled: true }, // Prevent clipping when going fast
-    //     TransformBundle::from_transform(Transform::from_xyz(2.0, 25.0, 0.0)),
-    //     LogicalPlayer(1),
-    //     FpsControllerInput {
-    //         pitch: -TAU / 12.0,
-    //         yaw: TAU * 5.0 / 8.0,
-    //         ..default()
-    //     },
-    //     FpsController {
-    //         walk_speed: 5.0,
-    //         run_speed: 10.0,
-    //         forward_speed: 10.0,
-    //         side_speed: 10.0,
-    //         air_speed_cap: 1.0,
-    //         sensitivity: 0.002,
-    //         ..default()
-    //     }
-    // ));
+    )).with_children(|builder|
+        {
+            builder.spawn(PointLightBundle {
+
+                // transform: Transform::from_xyz(5.0, 8.0, 2.0),
+                transform: Transform::from_xyz(0.0, 1.5, 0.0),
+                point_light: PointLight {
+                    intensity: 100.0, // lumens - roughly a 100W non-halogen incandescent bulb
+                    color: Color::ANTIQUE_WHITE,
+                    shadows_enabled: true,
+                    ..default()
+                },
+                ..default()
+            });
+        });
+
     commands.spawn((
         Camera3dBundle {
             camera_3d: Camera3d {
@@ -125,70 +108,34 @@ fn setup_physics(mut commands: Commands,
         },
         RenderPlayer(0),
     )).insert(Fxaa::default());
-    // commands.spawn((
-    //     Camera3dBundle {
-    //         camera_3d: Camera3d {
-    //             ..default()
-    //         },
-    //         camera: Camera {
-    //             priority: 0,
-    //             ..default()
-    //         },
-    //         ..default()
-    //     },
-    //     RenderPlayer(1),
-    // ));
+
 }
 
-fn setup() {}
-
 fn update_system(
-    key_input: Res<Input<KeyCode>>,
-    mut cameras: Query<
-        (&mut Camera, &RenderPlayer),
-        Without<LogicalPlayer>
-    >,
-    mut controllers: Query<
-        (&mut FpsController, &LogicalPlayer),
-        With<LogicalPlayer>
-    >,
+    _lines: ResMut<DebugLines>
 ) {
-    if !key_input.just_pressed(KeyCode::Key1) &&
-        !key_input.just_pressed(KeyCode::Key2) { return; }
 
-    let enabled_id = if key_input.just_pressed(KeyCode::Key1) {
-        0
-    } else {
-        1
-    };
-
-    println!("Change player to {enabled_id}");
-
-    for (mut controller, player_id) in controllers.iter_mut() {
-        if player_id.0 == enabled_id {
-            controller.enable_input = true;
-        } else {
-            controller.enable_input = false;
-        }
-    }
-
-    for (mut camera, player_id) in cameras.iter_mut() {
-        if player_id.0 == enabled_id {
-            camera.priority = 1;
-        } else {
-            camera.priority = 0;
-        }
-    }
+    // show chunks positions
+    // for x in -3 .. 3 {
+    //     for y in -3 .. 3 {
+    //         for z in -3 .. 3 {
+    //             let node = Vec3::new(x as f32 * 32.0, y as f32 * 32.0, z as f32 * 32.0);
+    //             lines.line_colored(node - Vec3::X * 0.5, node + Vec3::X * 0.5, 0.0, Color::RED);
+    //             lines.line_colored(node - Vec3::Y * 0.5, node + Vec3::Y * 0.5, 0.0, Color::GREEN);
+    //             lines.line_colored(node - Vec3::Z * 0.5, node + Vec3::Z * 0.5, 0.0, Color::BLUE);
+    //         }
+    //     }
+    // }
 }
 
 enum DigEventType {
     Build,
-    Dig
+    Dig,
 }
 
 struct DigEvent {
     event_type: DigEventType,
-    world_position: Vec3
+    world_position: Vec3,
 }
 
 const DIG_DISTANCE: Real = 4.0;
@@ -198,7 +145,7 @@ fn cast_ray(rapier_context: Res<RapierContext>,
             mut lines: ResMut<DebugLines>,
             btn: Res<Input<MouseButton>>,
             mut ev: EventWriter<DigEvent>) {
-    if !(btn.just_pressed(MouseButton::Left) || btn.just_pressed(MouseButton::Right)) { return }
+    if !(btn.just_pressed(MouseButton::Left) || btn.just_pressed(MouseButton::Right)) { return; }
 
     for (transform, collider, controller) in controllers.iter() {
         if let Some(capsule) = collider.as_capsule() {
@@ -210,19 +157,19 @@ fn cast_ray(rapier_context: Res<RapierContext>,
             let solid = false;
             let filter = QueryFilter { flags: QueryFilterFlags::ONLY_FIXED, ..default() };
 
-            if let Some((entity, toi)) = rapier_context.cast_ray(
+            if let Some((_entity, toi)) = rapier_context.cast_ray(
                 ray_pos, ray_dir, max_toi, solid, filter,
             ) {
-                let hit_point = ray_pos + ray_dir * toi;
-
-                lines.line_colored(hit_point - Vec3::X * 0.5, hit_point + Vec3::X * 0.5, 0.5, Color::RED);
-                lines.line_colored(hit_point - Vec3::Y * 0.5, hit_point + Vec3::Y * 0.5, 0.5, Color::GREEN);
-                lines.line_colored(hit_point - Vec3::Z * 0.5, hit_point + Vec3::Z * 0.5, 0.5, Color::BLUE);
+                // show hit point
+                // let hit_point = ray_pos + ray_dir * toi;
+                // lines.line_colored(hit_point - Vec3::X * 0.5, hit_point + Vec3::X * 0.5, 0.5, Color::RED);
+                // lines.line_colored(hit_point - Vec3::Y * 0.5, hit_point + Vec3::Y * 0.5, 0.5, Color::GREEN);
+                // lines.line_colored(hit_point - Vec3::Z * 0.5, hit_point + Vec3::Z * 0.5, 0.5, Color::BLUE);
 
                 if btn.just_pressed(MouseButton::Left) {
                     let inside_hit_point = ray_pos + ray_dir * (toi * 1.1);
                     ev.send(DigEvent { event_type: DigEventType::Dig, world_position: inside_hit_point });
-                } else if btn.just_pressed(MouseButton::Right)  {
+                } else if btn.just_pressed(MouseButton::Right) {
                     let outside_hit_point = ray_pos + ray_dir * (toi * 0.9);
 
                     let shape = Collider::cuboid(0.5, 0.5, 0.5);
@@ -232,7 +179,7 @@ fn cast_ray(rapier_context: Res<RapierContext>,
 
                     let mut allow = true;
                     rapier_context.intersections_with_shape(
-                        shape_pos, shape_rot, &shape, filter, |entity| {
+                        shape_pos, shape_rot, &shape, filter, |_entity| {
                             allow = false;
                             true
                         });
@@ -249,21 +196,21 @@ pub fn manage_cursor(
     mut windows: ResMut<Windows>,
     btn: Res<Input<MouseButton>>,
     key: Res<Input<KeyCode>>,
-    _controllers: Query<&mut FpsController>,
+    mut controllers: Query<&mut FpsController>,
 ) {
     let window = windows.get_primary_mut().unwrap();
     if btn.just_pressed(MouseButton::Left) {
         window.set_cursor_grab_mode(CursorGrabMode::Locked);
         window.set_cursor_visibility(false);
-        // for mut controller in &mut controllers {
-        //     controller.enable_input = true;
-        // }
+        for mut controller in controllers.iter_mut() {
+            controller.enable_input = true;
+        }
     }
     if key.just_pressed(KeyCode::Escape) {
         window.set_cursor_grab_mode(CursorGrabMode::None);
         window.set_cursor_visibility(true);
-        // for mut controller in &mut controllers {
-        //     controller.enable_input = false;
-        // }
+        for mut controller in controllers.iter_mut() {
+            controller.enable_input = false;
+        }
     }
 }

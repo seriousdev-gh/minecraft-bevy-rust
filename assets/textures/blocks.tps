@@ -50,7 +50,7 @@
         <key>dxtCompressionMode</key>
         <enum type="SettingsBase::DxtCompressionMode">DXT_PERCEPTUAL</enum>
         <key>ditherType</key>
-        <enum type="SettingsBase::DitherType">NearestNeighbour</enum>
+        <enum type="SettingsBase::DitherType">PngQuantLow</enum>
         <key>backgroundColor</key>
         <uint>0</uint>
         <key>libGdx</key>
@@ -194,9 +194,11 @@
             <key type="filename">blocks/debug.png</key>
             <key type="filename">blocks/debug2.png</key>
             <key type="filename">blocks/dirt.png</key>
-            <key type="filename">blocks/grass.png</key>
             <key type="filename">blocks/grass_block_side_overlay.png</key>
             <key type="filename">blocks/grass_block_snow.png</key>
+            <key type="filename">blocks/oak_leaves.png</key>
+            <key type="filename">blocks/oak_log.png</key>
+            <key type="filename">blocks/oak_log_top.png</key>
             <key type="filename">blocks/sand.png</key>
             <key type="filename">blocks/stone.png</key>
             <struct type="IndividualSpriteSettings">

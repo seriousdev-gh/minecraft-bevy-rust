@@ -73,7 +73,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     // environment map, use an appropriate colour and brightness to match
     commands.insert_resource(AmbientLight {
         color: Color::rgb_u8(210, 220, 240),
-        brightness: 0.8,
+        brightness: 0.4,
     });
 
     commands.insert_resource(Cubemap {
