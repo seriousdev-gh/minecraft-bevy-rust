@@ -20,7 +20,7 @@ rand = "0.8.5"
 bevy_rapier3d = "0.19.0"
 bevy_fps_controller = { git = "https://github.com/qhdwight/bevy_fps_controller.git", branch = "fix-pitch-dependent-movement" }
 noise = "0.8.2"
-block-mesh = { git = "https://github.com/bonsairobo/block-mesh-rs" }
+block-mesh = { git = "https://github.com/seriousdev-gh/block-mesh-rs.git" }
 bevy_common_assets = { version = "0.4.0", features = ["json"] }
 serde = "1.0.150"
 bevy_prototype_debug_lines = { version = "0.9", features = ["3d"] }

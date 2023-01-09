@@ -20,7 +20,7 @@ use bevy::render::view::NoFrustumCulling;
 use noise::utils::{NoiseMapBuilder, PlaneMapBuilder};
 
 use block_mesh::ndshape::{ConstShape, ConstShape3u32};
-use block_mesh::{visible_block_faces, MergeVoxel, UnitQuadBuffer, Voxel, VoxelVisibility, RIGHT_HANDED_Y_UP_CONFIG, OrientedBlockFace};
+use block_mesh::{visible_block_faces, UnitQuadBuffer, Voxel, VoxelVisibility, RIGHT_HANDED_Y_UP_CONFIG, OrientedBlockFace};
 
 use bevy_common_assets::json::JsonAssetPlugin;
 use rand::Rng;
@@ -144,8 +144,6 @@ fn generate_world(mut commands: Commands,
     let material_handle = materials.add(StandardMaterial {
         base_color_texture: Some(texture_handle),
         alpha_mode: AlphaMode::Mask(0.5),
-        double_sided: true,
-        cull_mode: None,
         perceptual_roughness: 1.0,
         ..default()
     });
@@ -215,6 +213,7 @@ fn generate_world(mut commands: Commands,
     }
 
     // Tree generation
+    // TODO: respect biome, less trees in flatlands more in forest
     let poisson = Poisson2D::new()
         .with_dimensions([(CHUNKS_COUNT_DIM * CHUNK_SIZE) as f32, (CHUNKS_COUNT_DIM * CHUNK_SIZE) as f32], 6.0)
         .generate();
@@ -331,7 +330,6 @@ fn dig_event_handler(
                 }
 
                 println!("Must update chunk! {} trans={}", position, transform.translation);
-                // let mut samples = chunk.samples;
                 let voxel_index = SampleShape::linearize(position.as_uvec3().to_array());
 
                 chunk.samples[voxel_index as usize] = match ev.event_type {
@@ -345,7 +343,6 @@ fn dig_event_handler(
                 if generated > 0 {
                     commands.entity(entity)
                         .insert(mesh_handle)
-                        // .insert(ChunkInfo { samples })
                         .insert(Collider::from_bevy_mesh(&simple_mesh, &ComputedColliderShape::TriMesh).unwrap());
                 }
             }
@@ -516,7 +513,7 @@ enum VoxelType {
     Dirt,
     Sand,
     OakLog,
-    OakLeaves,
+    OakLeaves
 }
 
 #[derive(Clone, Copy, Eq, PartialEq)]
@@ -528,21 +525,8 @@ impl Voxel for MaterialVoxel {
     fn get_visibility(&self) -> VoxelVisibility {
         match self.0 {
             VoxelType::Empty => VoxelVisibility::Empty,
-            VoxelType::OakLeaves => VoxelVisibility::Translucent,
+            VoxelType::OakLeaves => VoxelVisibility::Always,
             _ => VoxelVisibility::Opaque
         }
-    }
-}
-
-impl MergeVoxel for MaterialVoxel {
-    type MergeValue = Self;
-    type MergeValueFacingNeighbour = Self;
-
-    fn merge_value(&self) -> Self::MergeValue {
-        *self
-    }
-
-    fn merge_value_facing_neighbour(&self) -> Self::MergeValueFacingNeighbour {
-        *self
     }
 }

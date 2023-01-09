@@ -936,7 +936,7 @@ checksum = "0d8c1fef690941d3e7788d328517591fecc684c084084702d6ff1641e993699a"
 [[package]]
 name = "block-mesh"
 version = "0.2.0"
-source = "git+https://github.com/bonsairobo/block-mesh-rs#793c53e82c12b3f7e9502006664c6e81f8b1c78a"
+source = "git+https://github.com/seriousdev-gh/block-mesh-rs.git#7b838c34df7164e1158b9262d896d51e1676822d"
 dependencies = [
  "ilattice",
  "ndcopy",
