@@ -3,7 +3,7 @@
 use bevy::{
     prelude::*,
 };
-use bevy::core_pipeline::clear_color::ClearColorConfig;
+
 use bevy::diagnostic::{Diagnostics, FrameTimeDiagnosticsPlugin};
 use iyes_loopless::prelude::ConditionSet;
 use crate::GameState;

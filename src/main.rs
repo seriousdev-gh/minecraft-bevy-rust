@@ -1,15 +1,19 @@
 use std::f32::consts::TAU;
 
+
 mod terrain;
 mod skybox;
 mod ui;
 
 use bevy_prototype_debug_lines::*;
 use bevy_fps_controller::controller::*;
-use bevy::{prelude::*};
 use bevy::core_pipeline::fxaa::Fxaa;
+use bevy::pbr::{NotShadowCaster, NotShadowReceiver};
+
+use bevy::prelude::*;
 
 use bevy::window::CursorGrabMode;
+
 use bevy_rapier3d::prelude::*;
 
 use crate::skybox::SkyboxPlugin;
@@ -25,10 +29,15 @@ pub enum GameState {
     InGame,
 }
 
+#[derive(Component)]
+struct OutlineCube;
+
 pub fn main() {
     App::new()
         .insert_resource(Msaa { samples: 1 })
-        .add_plugins(DefaultPlugins.set(ImagePlugin::default_nearest()))
+        .add_plugins(DefaultPlugins
+            .set(ImagePlugin::default_nearest())
+        )
         .add_loopless_state(GameState::InGame)
         .add_plugin(SkyboxPlugin)
         .add_plugin(WorldPlugin)
@@ -52,7 +61,9 @@ pub fn main() {
 }
 
 
-fn setup(mut commands: Commands) {
+fn setup(mut commands: Commands,
+         mut meshes: ResMut<Assets<Mesh>>,
+         mut materials: ResMut<Assets<StandardMaterial>>) {
     commands.spawn((
         Collider::capsule(Vec3::Y * 0.5, Vec3::Y * 1.5, 0.45),
         ActiveEvents::COLLISION_EVENTS,
@@ -109,6 +120,89 @@ fn setup(mut commands: Commands) {
         RenderPlayer(0),
     )).insert(Fxaa::default());
 
+    commands
+        .spawn((OutlineCube, SpatialBundle::default()))
+        .with_children(|builder| {
+
+            let extent = Vec3::new(0.5, 0.5, 0.5);
+            let line_width = 0.005;
+            let _color = Color::BLACK;
+
+            let v1 = Vec3::new(-extent.x, -extent.y, -extent.z);
+            let v2 = Vec3::new(extent.x, -extent.y, -extent.z);
+            let v3 = Vec3::new(extent.x, extent.y, -extent.z);
+            let v4 = Vec3::new(-extent.x, extent.y, -extent.z);
+            let v5 = Vec3::new(-extent.x, -extent.y, extent.z);
+            let v6 = Vec3::new(extent.x, -extent.y, extent.z);
+            let v7 = Vec3::new(extent.x, extent.y, extent.z);
+            let v8 = Vec3::new(-extent.x, extent.y, extent.z);
+
+            let boxes = [
+                shape::Box {
+                    min_x: v1.x - line_width, min_z: v1.z - line_width, min_y: v1.y - line_width,
+                    max_x: v2.x + line_width, max_z: v2.z + line_width, max_y: v2.y + line_width
+                },
+                shape::Box {
+                    min_x: v2.x - line_width, min_z: v2.z - line_width, min_y: v2.y - line_width,
+                    max_x: v3.x + line_width, max_z: v3.z + line_width, max_y: v3.y + line_width
+                },
+                shape::Box {
+                    min_x: v4.x - line_width, min_z: v4.z - line_width, min_y: v4.y - line_width,
+                    max_x: v3.x + line_width, max_z: v3.z + line_width, max_y: v3.y + line_width
+                },
+                shape::Box {
+                    min_x: v1.x - line_width, min_z: v1.z - line_width, min_y: v1.y - line_width,
+                    max_x: v4.x + line_width, max_z: v4.z + line_width, max_y: v4.y + line_width
+                },
+                shape::Box {
+                    min_x: v5.x - line_width, min_z: v5.z - line_width, min_y: v5.y - line_width,
+                    max_x: v6.x + line_width, max_z: v6.z + line_width, max_y: v6.y + line_width
+                },
+                shape::Box {
+                    min_x: v6.x - line_width, min_z: v6.z - line_width, min_y: v6.y - line_width,
+                    max_x: v7.x + line_width, max_z: v7.z + line_width, max_y: v7.y + line_width
+                },
+                shape::Box {
+                    min_x: v8.x - line_width, min_z: v8.z - line_width, min_y: v8.y - line_width,
+                    max_x: v7.x + line_width, max_z: v7.z + line_width, max_y: v7.y + line_width
+                },
+                shape::Box {
+                    min_x: v5.x - line_width, min_z: v5.z - line_width, min_y: v5.y - line_width,
+                    max_x: v8.x + line_width, max_z: v8.z + line_width, max_y: v8.y + line_width
+                },
+                shape::Box {
+                    min_x: v1.x - line_width, min_z: v1.z - line_width, min_y: v1.y - line_width,
+                    max_x: v5.x + line_width, max_z: v5.z + line_width, max_y: v5.y + line_width
+                },
+                shape::Box {
+                    min_x: v2.x - line_width, min_z: v2.z - line_width, min_y: v2.y - line_width,
+                    max_x: v6.x + line_width, max_z: v6.z + line_width, max_y: v6.y + line_width
+                },
+                shape::Box {
+                    min_x: v3.x - line_width, min_z: v3.z - line_width, min_y: v3.y - line_width,
+                    max_x: v7.x + line_width, max_z: v7.z + line_width, max_y: v7.y + line_width
+                },
+                shape::Box {
+                    min_x: v4.x - line_width, min_z: v4.z - line_width, min_y: v4.y - line_width,
+                    max_x: v8.x + line_width, max_z: v8.z + line_width, max_y: v8.y + line_width
+                }
+            ];
+
+            for cuboid in boxes {
+                builder.spawn(PbrBundle {
+                    mesh: meshes.add(Mesh::from(cuboid)),
+                    material: materials.add(StandardMaterial {
+                        base_color: Color::rgb(0.1, 0.1, 0.1),
+                        unlit: true,
+                        ..default()
+                    }),
+                    transform: Transform::from_xyz(0.0, 0.0, 0.0),
+                    ..default()
+                }).insert((NotShadowReceiver, NotShadowCaster));
+            }
+
+
+        });
 }
 
 fn update_system(
@@ -141,11 +235,12 @@ struct DigEvent {
 const DIG_DISTANCE: Real = 4.0;
 
 fn cast_ray(rapier_context: Res<RapierContext>,
-            controllers: Query<(&Transform, &Collider, &FpsController)>,
-            mut lines: ResMut<DebugLines>,
+            controllers: Query<(&Transform, &Collider, &FpsController), Without<OutlineCube>>,
+            mut outline_cube: Query<(&mut Transform, &mut Visibility), With<OutlineCube>>,
             btn: Res<Input<MouseButton>>,
             mut ev: EventWriter<DigEvent>) {
-    if !(btn.just_pressed(MouseButton::Left) || btn.just_pressed(MouseButton::Right)) { return; }
+
+    let mut outline_cube = outline_cube.single_mut();
 
     for (transform, collider, controller) in controllers.iter() {
         if let Some(capsule) = collider.as_capsule() {
@@ -157,22 +252,24 @@ fn cast_ray(rapier_context: Res<RapierContext>,
             let solid = false;
             let filter = QueryFilter { flags: QueryFilterFlags::ONLY_FIXED, ..default() };
 
+
             if let Some((_entity, toi)) = rapier_context.cast_ray(
                 ray_pos, ray_dir, max_toi, solid, filter,
             ) {
-                // show hit point
-                // let hit_point = ray_pos + ray_dir * toi;
-                // lines.line_colored(hit_point - Vec3::X * 0.5, hit_point + Vec3::X * 0.5, 0.5, Color::RED);
-                // lines.line_colored(hit_point - Vec3::Y * 0.5, hit_point + Vec3::Y * 0.5, 0.5, Color::GREEN);
-                // lines.line_colored(hit_point - Vec3::Z * 0.5, hit_point + Vec3::Z * 0.5, 0.5, Color::BLUE);
+
+                // TODO: use normal to identify which side of cube build
+                let inside_hit_point = ray_pos + ray_dir * (toi * 1.1);
+
+                let position = inside_hit_point.floor() + Vec3::new(0.5, 0.5, 0.5);
+
+                outline_cube.0.translation = position;
+                outline_cube.1.is_visible = true;
 
                 if btn.just_pressed(MouseButton::Left) {
-                    let inside_hit_point = ray_pos + ray_dir * (toi * 1.1);
                     ev.send(DigEvent { event_type: DigEventType::Dig, world_position: inside_hit_point });
                 } else if btn.just_pressed(MouseButton::Right) {
-                    let outside_hit_point = ray_pos + ray_dir * (toi * 0.9);
-
                     let shape = Collider::cuboid(0.5, 0.5, 0.5);
+                    let outside_hit_point = ray_pos + ray_dir * (toi * 0.9);
                     let shape_pos = outside_hit_point.floor() + Vec3::new(0.5, 0.5, 0.5);
                     let shape_rot = Quat::IDENTITY;
                     let filter = QueryFilter::only_dynamic();
@@ -187,6 +284,8 @@ fn cast_ray(rapier_context: Res<RapierContext>,
                         ev.send(DigEvent { event_type: DigEventType::Build, world_position: outside_hit_point });
                     }
                 }
+            } else {
+                outline_cube.1.is_visible = false;
             }
         }
     }
