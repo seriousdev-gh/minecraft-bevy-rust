@@ -17,8 +17,8 @@ opt-level = 3
 [dependencies]
 bevy = { version = "0.9.1", features = ["dds", "ktx2", "zstd", "dynamic"] }
 rand = "0.8.5"
-bevy_rapier3d = "0.19.0"
-bevy_fps_controller = { git = "https://github.com/qhdwight/bevy_fps_controller.git", branch = "fix-pitch-dependent-movement" }
+bevy_rapier3d = "0.20.0"
+bevy_fps_controller = { git = "https://github.com/qhdwight/bevy_fps_controller.git", rev = "7111389955fbe2731da7f1e92ed53fd1ef439519" }
 noise = "0.8.2"
 block-mesh = { git = "https://github.com/seriousdev-gh/block-mesh-rs.git" }
 bevy_common_assets = { version = "0.4.0", features = ["json"] }
