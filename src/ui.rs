@@ -1,12 +1,12 @@
 //! This example illustrates the various features of Bevy UI.
 
+
 use bevy::{
     prelude::*,
 };
 
 use bevy::diagnostic::{Diagnostics, FrameTimeDiagnosticsPlugin};
-use iyes_loopless::prelude::ConditionSet;
-use crate::GameState;
+
 
 
 pub struct MyUiPlugin;
@@ -16,13 +16,7 @@ impl Plugin for MyUiPlugin {
         app
             .add_plugin(FrameTimeDiagnosticsPlugin::default())
             .add_startup_system(setup)
-            .add_system_set(
-                ConditionSet::new()
-                    .run_in_state(GameState::InGame)
-                    .with_system(text_update_system)
-                    .into()
-            )
-
+            .add_system(text_update_system)
         ;
     }
 }
@@ -42,7 +36,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     //     },
     //     camera: Camera {
     //         // renders after / on top of the main camera
-    //         priority: 10,
+    //         order: 10,
     //         ..default()
     //     },
     //     ..default()
@@ -84,7 +78,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
             parent.spawn((
                 // Create a TextBundle that has a Text with a list of sections.
                 TextBundle::from_section(
-                    "",
+                    "-",
                     TextStyle {
                         font: asset_server.load("fonts/FiraSans-Bold.ttf"),
                         font_size: 20.0,

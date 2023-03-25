@@ -15,7 +15,7 @@ use std::time::SystemTime;
 use bevy::asset::LoadState;
 
 
-use bevy::render::view::NoFrustumCulling;
+
 
 use noise::utils::{NoiseMapBuilder, PlaneMapBuilder};
 
@@ -143,7 +143,8 @@ fn generate_world(mut commands: Commands,
 
     let material_handle = materials.add(StandardMaterial {
         base_color_texture: Some(texture_handle),
-        alpha_mode: AlphaMode::Mask(0.5),
+        // TODO: fix alpha mode
+        // alpha_mode: AlphaMode::Mask(0.9),
         perceptual_roughness: 1.0,
         ..default()
     });
@@ -500,7 +501,7 @@ fn spawn_pbr(
         .insert(RigidBody::Fixed)
         .insert(Collider::from_bevy_mesh(&mesh, &ComputedColliderShape::TriMesh).unwrap())
         // TODO: why chunks doesn't render without NoFrustumCulling ?
-        .insert(NoFrustumCulling)
+        // .insert(NoFrustumCulling)
         .insert(ChunkInfo { samples });
 }
 

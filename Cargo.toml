@@ -15,14 +15,13 @@ opt-level = 3
 
 
 [dependencies]
-bevy = { version = "0.9.1", features = ["dds", "ktx2", "zstd", "dynamic"] }
+bevy = { version = "0.10.0", features = ["dds", "ktx2", "zstd", "dynamic_linking"] }
 rand = "0.8.5"
-bevy_rapier3d = "0.20.0"
-bevy_fps_controller = { git = "https://github.com/qhdwight/bevy_fps_controller.git", rev = "7111389955fbe2731da7f1e92ed53fd1ef439519" }
+bevy_rapier3d = "0.21.0"
+bevy_fps_controller = "0.2.0-dev"
 noise = "0.8.2"
 block-mesh = { git = "https://github.com/seriousdev-gh/block-mesh-rs.git" }
-bevy_common_assets = { version = "0.4.0", features = ["json"] }
+bevy_common_assets = { version = "0.6.0", features = ["json"] }
 serde = "1.0.150"
-bevy_prototype_debug_lines = { version = "0.9", features = ["3d"] }
-iyes_loopless = "0.9.1"
+bevy_prototype_debug_lines = { version = "0.10.1", features = ["3d"] }
 fast_poisson = { version = "0.5.2", features=["single_precision"] }

@@ -4,8 +4,9 @@ use std::f32::consts::PI;
 
 use bevy::{
     asset::LoadState,
-    pbr::{MaterialPipeline, MaterialPipelineKey},
+    pbr::{MaterialPipeline, MaterialPipelineKey, NotShadowCaster, NotShadowReceiver},
     prelude::*,
+    reflect::TypeUuid,
     render::{
         mesh::MeshVertexBufferLayout,
         render_asset::RenderAssets,
@@ -20,7 +21,6 @@ use bevy::{
         texture::{CompressedImageFormats, FallbackImage},
     },
 };
-
 
 const CUBEMAPS: &[(&str, CompressedImageFormats)] = &[
     (
@@ -61,9 +61,11 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
             ..default()
         },
         transform: Transform::from_xyz(0.0, 2.0, 0.0)
-            .with_rotation(Quat::from_rotation_x(-PI / 4.)),
+            .with_rotation(Quat::from_rotation_x(-PI / 4.))
+            ,
         ..default()
     });
+    
 
     let skybox_handle = asset_server.load(CUBEMAPS[0].0);
 
@@ -159,13 +161,13 @@ fn asset_loaded(
             }
         }
         if !updated {
-            commands.spawn(MaterialMeshBundle::<CubemapMaterial> {
+            commands.spawn((MaterialMeshBundle::<CubemapMaterial> {
                 mesh: meshes.add(Mesh::from(shape::Cube { size: 10000.0 })),
                 material: cubemap_materials.add(CubemapMaterial {
                     base_color_texture: Some(cubemap.image_handle.clone_weak()),
                 }),
                 ..default()
-            });
+            }, NotShadowCaster, NotShadowReceiver));
         }
 
         cubemap.is_loaded = true;
@@ -181,7 +183,7 @@ fn animate_light_direction(
     }
 }
 
-#[derive(bevy::reflect::TypeUuid, Debug, Clone)]
+#[derive(Debug, Clone, TypeUuid)]
 #[uuid = "9509a0f8-3c05-48ee-a13e-a93226c7f488"]
 struct CubemapMaterial {
     base_color_texture: Option<Handle<Image>>,
@@ -212,12 +214,11 @@ impl AsBindGroup for CubemapMaterial {
         render_device: &RenderDevice,
         images: &RenderAssets<Image>,
         _fallback_image: &FallbackImage,
-    ) -> Result<PreparedBindGroup<Self>, AsBindGroupError> {
+    ) -> Result<PreparedBindGroup<Self::Data>, AsBindGroupError> {
         let base_color_texture = self
             .base_color_texture
             .as_ref()
             .ok_or(AsBindGroupError::RetryNextUpdate)?;
-
         let image = images
             .get(base_color_texture)
             .ok_or(AsBindGroupError::RetryNextUpdate)?;

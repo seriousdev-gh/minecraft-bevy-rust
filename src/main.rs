@@ -10,9 +10,7 @@ use bevy_fps_controller::controller::*;
 use bevy::core_pipeline::fxaa::Fxaa;
 use bevy::pbr::{NotShadowCaster, NotShadowReceiver};
 
-use bevy::prelude::*;
-
-use bevy::window::CursorGrabMode;
+use bevy::{prelude::*, window::CursorGrabMode};
 
 use bevy_rapier3d::prelude::*;
 
@@ -20,12 +18,11 @@ use crate::skybox::SkyboxPlugin;
 use crate::terrain::WorldPlugin;
 use crate::ui::MyUiPlugin;
 
-use iyes_loopless::prelude::*;
-
-#[derive(Clone, Eq, PartialEq, Debug, Hash)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Default, States)]
 pub enum GameState {
     LoadingBefore,
     Loading,
+    #[default]
     InGame,
 }
 
@@ -34,11 +31,11 @@ struct OutlineCube;
 
 pub fn main() {
     App::new()
-        .insert_resource(Msaa { samples: 1 })
+        .insert_resource(Msaa::Sample8)
         .add_plugins(DefaultPlugins
             .set(ImagePlugin::default_nearest())
         )
-        .add_loopless_state(GameState::InGame)
+        .add_state::<GameState>()
         .add_plugin(SkyboxPlugin)
         .add_plugin(WorldPlugin)
         .add_plugin(MyUiPlugin)
@@ -46,15 +43,15 @@ pub fn main() {
         .add_plugin(DebugLinesPlugin::default())
         .add_plugin(RapierPhysicsPlugin::<NoUserData>::default())
         // .add_plugin(RapierDebugRenderPlugin::default())
-        .add_enter_system(GameState::InGame, setup)
+        .add_system(setup.in_schedule(OnEnter(GameState::InGame)))
         .add_event::<DigEvent>()
-        .add_system_set(
-            ConditionSet::new()
-                .run_in_state(GameState::InGame)
-                .with_system(manage_cursor)
-                .with_system(update_system)
-                .with_system(cast_ray)
-                .into()
+        .add_systems(
+            (
+                manage_cursor,
+                update_system,
+                cast_ray
+            )
+                .in_set(OnUpdate(GameState::InGame)),
         )
         .add_system(bevy::window::close_on_esc)
         .run();
@@ -112,7 +109,7 @@ fn setup(mut commands: Commands,
                 ..default()
             },
             camera: Camera {
-                priority: 1,
+                order: 1,
                 ..default()
             },
             ..default()
@@ -241,7 +238,7 @@ fn cast_ray(rapier_context: Res<RapierContext>,
             mut ev: EventWriter<DigEvent>) {
 
     let mut outline_cube = outline_cube.single_mut();
-
+ 
     for (transform, collider, controller) in controllers.iter() {
         if let Some(capsule) = collider.as_capsule() {
             let camera_height = capsule.segment().b().y + capsule.radius() * 0.75;
@@ -263,7 +260,7 @@ fn cast_ray(rapier_context: Res<RapierContext>,
                 let position = inside_hit_point.floor() + Vec3::new(0.5, 0.5, 0.5);
 
                 outline_cube.0.translation = position;
-                outline_cube.1.is_visible = true;
+                *outline_cube.1 = Visibility::Visible;
 
                 if btn.just_pressed(MouseButton::Left) {
                     ev.send(DigEvent { event_type: DigEventType::Dig, world_position: inside_hit_point });
@@ -285,29 +282,29 @@ fn cast_ray(rapier_context: Res<RapierContext>,
                     }
                 }
             } else {
-                outline_cube.1.is_visible = false;
+                *outline_cube.1 = Visibility::Hidden;
             }
         }
     }
 }
 
 pub fn manage_cursor(
-    mut windows: ResMut<Windows>,
+    mut windows: Query<&mut Window>,
     btn: Res<Input<MouseButton>>,
     key: Res<Input<KeyCode>>,
     mut controllers: Query<&mut FpsController>,
 ) {
-    let window = windows.get_primary_mut().unwrap();
+    let mut window = windows.single_mut();
     if btn.just_pressed(MouseButton::Left) {
-        window.set_cursor_grab_mode(CursorGrabMode::Locked);
-        window.set_cursor_visibility(false);
+        window.cursor.visible = false;
+        window.cursor.grab_mode = CursorGrabMode::Locked;
         for mut controller in controllers.iter_mut() {
             controller.enable_input = true;
         }
     }
     if key.just_pressed(KeyCode::Escape) {
-        window.set_cursor_grab_mode(CursorGrabMode::None);
-        window.set_cursor_visibility(true);
+        window.cursor.visible = true;
+        window.cursor.grab_mode = CursorGrabMode::None;
         for mut controller in controllers.iter_mut() {
             controller.enable_input = false;
         }
