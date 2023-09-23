@@ -5,6 +5,7 @@ mod terrain;
 mod skybox;
 mod ui;
 
+use bevy::window::PresentMode;
 use bevy_prototype_debug_lines::*;
 use bevy_fps_controller::controller::*;
 use bevy::core_pipeline::fxaa::Fxaa;
@@ -34,6 +35,14 @@ pub fn main() {
         .insert_resource(Msaa::Sample8)
         .add_plugins(DefaultPlugins
             .set(ImagePlugin::default_nearest())
+            .set(WindowPlugin {
+                primary_window: Some(Window {
+                    title: "I am a window!".into(),
+                    position: WindowPosition::At(IVec2 { x: 0, y: 0 }),
+                    ..default()
+                }),
+                ..default()
+            })
         )
         .add_state::<GameState>()
         .add_plugin(SkyboxPlugin)

@@ -60,9 +60,16 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
             shadows_enabled: true,
             ..default()
         },
-        transform: Transform::from_xyz(0.0, 2.0, 0.0)
-            .with_rotation(Quat::from_rotation_x(-PI / 4.))
-            ,
+        transform: Transform {
+            translation: Vec3::new(0.0, 2.0, 0.0),
+            rotation: Quat::from_euler(
+                EulerRot::XYZ,
+                (-45.0_f32).to_radians(),
+                (25.0_f32).to_radians(),
+                (0.0_f32).to_radians(),
+            ),
+            ..default()
+        },
         ..default()
     });
     
@@ -75,7 +82,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     // environment map, use an appropriate colour and brightness to match
     commands.insert_resource(AmbientLight {
         color: Color::rgb_u8(210, 220, 240),
-        brightness: 0.4,
+        brightness: 0.5,
     });
 
     commands.insert_resource(Cubemap {
