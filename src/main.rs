@@ -5,10 +5,8 @@ mod terrain;
 mod skybox;
 mod ui;
 
-use bevy::window::PresentMode;
-use bevy_prototype_debug_lines::*;
+use bevy::core_pipeline::experimental::taa::{TemporalAntiAliasPlugin, TemporalAntiAliasBundle};
 use bevy_fps_controller::controller::*;
-use bevy::core_pipeline::fxaa::Fxaa;
 use bevy::pbr::{NotShadowCaster, NotShadowReceiver};
 
 use bevy::{prelude::*, window::CursorGrabMode};
@@ -32,12 +30,11 @@ struct OutlineCube;
 
 pub fn main() {
     App::new()
-        .insert_resource(Msaa::Sample8)
+        .insert_resource(Msaa::Off)
         .add_plugins(DefaultPlugins
             .set(ImagePlugin::default_nearest())
             .set(WindowPlugin {
                 primary_window: Some(Window {
-                    title: "I am a window!".into(),
                     position: WindowPosition::At(IVec2 { x: 0, y: 0 }),
                     ..default()
                 }),
@@ -45,24 +42,21 @@ pub fn main() {
             })
         )
         .add_state::<GameState>()
-        .add_plugin(SkyboxPlugin)
-        .add_plugin(WorldPlugin)
-        .add_plugin(MyUiPlugin)
-        .add_plugin(FpsControllerPlugin)
-        .add_plugin(DebugLinesPlugin::default())
-        .add_plugin(RapierPhysicsPlugin::<NoUserData>::default())
+        .add_plugins((SkyboxPlugin, TemporalAntiAliasPlugin))
+        .add_plugins((WorldPlugin, MyUiPlugin, FpsControllerPlugin))
+        .add_plugins(RapierPhysicsPlugin::<NoUserData>::default())
         // .add_plugin(RapierDebugRenderPlugin::default())
-        .add_system(setup.in_schedule(OnEnter(GameState::InGame)))
+        .add_systems(OnEnter(GameState::InGame), setup)
         .add_event::<DigEvent>()
-        .add_systems(
+        .add_systems(Update,
             (
                 manage_cursor,
                 update_system,
                 cast_ray
             )
-                .in_set(OnUpdate(GameState::InGame)),
+                .run_if(in_state(GameState::InGame)),
         )
-        .add_system(bevy::window::close_on_esc)
+        .add_systems(Update, bevy::window::close_on_esc)
         .run();
 }
 
@@ -118,13 +112,19 @@ fn setup(mut commands: Commands,
                 ..default()
             },
             camera: Camera {
+                hdr: true,
                 order: 1,
                 ..default()
             },
             ..default()
         },
+        bevy::core_pipeline::contrast_adaptive_sharpening::ContrastAdaptiveSharpeningSettings {
+            enabled: false,
+            ..default()
+        },
+        TemporalAntiAliasBundle::default(),
         RenderPlayer(0),
-    )).insert(Fxaa::default());
+    ));
 
     commands
         .spawn((OutlineCube, SpatialBundle::default()))
@@ -212,7 +212,6 @@ fn setup(mut commands: Commands,
 }
 
 fn update_system(
-    _lines: ResMut<DebugLines>
 ) {
 
     // show chunks positions
@@ -233,6 +232,7 @@ enum DigEventType {
     Dig,
 }
 
+#[derive(Event)]
 struct DigEvent {
     event_type: DigEventType,
     world_position: Vec3,

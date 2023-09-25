@@ -1,23 +1,16 @@
-//! This example illustrates the various features of Bevy UI.
+use bevy::prelude::*;
 
-
-use bevy::{
-    prelude::*,
-};
-
-use bevy::diagnostic::{Diagnostics, FrameTimeDiagnosticsPlugin};
-
-
+use bevy::diagnostic::{FrameTimeDiagnosticsPlugin, DiagnosticsStore, Diagnostic, RegisterDiagnostic};
 
 pub struct MyUiPlugin;
 
 impl Plugin for MyUiPlugin {
     fn build(&self, app: &mut App) {
         app
-            .add_plugin(FrameTimeDiagnosticsPlugin::default())
-            .add_startup_system(setup)
-            .add_system(text_update_system)
-        ;
+            .add_plugins(FrameTimeDiagnosticsPlugin::default())
+            .add_systems(Startup, setup)
+            .add_systems(Update, text_update_system)
+            .register_diagnostic(Diagnostic::new(FrameTimeDiagnosticsPlugin::FPS, "FPS", 10));
     }
 }
 
@@ -25,28 +18,13 @@ impl Plugin for MyUiPlugin {
 #[derive(Component)]
 struct FpsText;
 
-
 fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
-    // Camera
-    // commands.spawn(Camera2dBundle {
-    //     camera_2d: Camera2d {
-    //         // Don't draw a clear color on top of the 3d stuff
-    //         clear_color: ClearColorConfig::None,
-    //         ..default()
-    //     },
-    //     camera: Camera {
-    //         // renders after / on top of the main camera
-    //         order: 10,
-    //         ..default()
-    //     },
-    //     ..default()
-    // });
-
     // root node
     commands
         .spawn(NodeBundle {
             style: Style {
-                size: Size::new(Val::Percent(100.0), Val::Percent(100.0)),
+                width: Val::Percent(100.0),
+                height: Val::Percent(100.0),
                 justify_content: JustifyContent::SpaceBetween,
                 ..default()
             },
@@ -56,7 +34,8 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
             parent
                 .spawn(NodeBundle {
                     style: Style {
-                        size: Size::new(Val::Percent(100.0), Val::Percent(100.0)),
+                        width: Val::Percent(100.0),
+                        height: Val::Percent(100.0),
                         position_type: PositionType::Absolute,
                         align_items: AlignItems::Center,
                         justify_content: JustifyContent::Center,
@@ -68,7 +47,8 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
                     parent
                         .spawn(NodeBundle {
                             style: Style {
-                                size: Size::new(Val::Px(5.0), Val::Px(5.0)),
+                                width: Val::Px(5.0),
+                                height: Val::Px(5.0),
                                 ..default()
                             },
                             background_color: Color::rgb(1.0, 1.0, 1.0).into(),
@@ -90,7 +70,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
         });
 }
 
-fn text_update_system(diagnostics: Res<Diagnostics>, mut query: Query<&mut Text, With<FpsText>>) {
+fn text_update_system(diagnostics: Res<DiagnosticsStore>, mut query: Query<&mut Text, With<FpsText>>) {
     for mut text in &mut query {
         if let Some(fps) = diagnostics.get(FrameTimeDiagnosticsPlugin::FPS) {
             if let Some(value) = fps.smoothed() {

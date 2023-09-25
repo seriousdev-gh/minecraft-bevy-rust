@@ -1,8 +1,8 @@
 use bevy::{
     prelude::*,
     render::{
-        mesh::{Indices},
-        render_resource::{PrimitiveTopology},
+        mesh::Indices,
+        render_resource::PrimitiveTopology, view::NoFrustumCulling,
     },
 };
 
@@ -45,47 +45,44 @@ pub struct WorldPlugin;
 impl Plugin for WorldPlugin {
     fn build(&self, app: &mut App) {
         app
-            .add_plugin(JsonAssetPlugin::<TextureAtlas>::new(&["json"]))
-            .add_startup_system(load_atlas)
-            .add_system(asset_loaded)
-            .add_system(dig_event_handler)
-        // .add_enter_system(GameState::LoadingBefore, load_atlas)
-        // .add_enter_system(GameState::Loading, generate_world)
+            .add_plugins(JsonAssetPlugin::<TextureAtlas>::new(&["json"]))
+            .add_systems(Startup, load_atlas)
+            .add_systems(Update, (asset_loaded, dig_event_handler))
         ;
     }
 }
 
-#[derive(serde::Deserialize, bevy::reflect::TypeUuid)]
-#[uuid = "413be529-bfeb-41b3-9db0-4b8b380a2c46"]
+#[derive(serde::Deserialize, bevy::reflect::TypeUuid, bevy::reflect::TypePath)]
+#[uuid = "e2df0986-b464-4766-ad99-e0ff9cfd05a7"]
 struct TextureAtlas {
     frames: HashMap<String, ImageDescription>,
     meta: Meta,
 }
 
 
-#[derive(serde::Deserialize, bevy::reflect::TypeUuid)]
-#[uuid = "413be529-bfeb-41b3-9db0-4b8b380a2c47"]
+#[derive(serde::Deserialize, bevy::reflect::TypeUuid, bevy::reflect::TypePath)]
+#[uuid = "a86ea47c-3a79-46b8-b67c-289e9fbb55d0"]
 struct Meta {
     size: Size,
 }
 
 
-#[derive(serde::Deserialize, bevy::reflect::TypeUuid)]
-#[uuid = "413be529-bfeb-41b3-9db0-4b8b380a2c47"]
+#[derive(serde::Deserialize, bevy::reflect::TypeUuid, bevy::reflect::TypePath)]
+#[uuid = "0403839f-b7bf-4fa6-a94d-3d91ffe26cec"]
 struct Size {
     w: f32,
     h: f32,
 }
 
 
-#[derive(serde::Deserialize, bevy::reflect::TypeUuid)]
-#[uuid = "413be529-bfeb-41b3-9db0-4b8b380a2c47"]
+#[derive(serde::Deserialize, bevy::reflect::TypeUuid, bevy::reflect::TypePath)]
+#[uuid = "535ceaaa-8372-4992-b857-272c19c60964"]
 struct ImageDescription {
     frame: Frame,
 }
 
-#[derive(serde::Deserialize, bevy::reflect::TypeUuid)]
-#[uuid = "413be529-bfeb-41b3-9db0-4b8b380a2c48"]
+#[derive(serde::Deserialize, bevy::reflect::TypeUuid, bevy::reflect::TypePath)]
+#[uuid = "3bfc7636-53f0-4590-96fa-363602bff14f"]
 struct Frame {
     x: f32,
     y: f32,
@@ -93,7 +90,7 @@ struct Frame {
     h: f32,
 }
 
-#[derive(Resource, Clone)]
+#[derive(Resource, Clone, bevy::reflect::TypePath)]
 struct TextureAtlasHandle(Handle<TextureAtlas>);
 
 #[derive(Component)]
@@ -143,8 +140,8 @@ fn generate_world(mut commands: Commands,
 
     let material_handle = materials.add(StandardMaterial {
         base_color_texture: Some(texture_handle),
-        // TODO: fix alpha mode
-        // alpha_mode: AlphaMode::Mask(0.9),
+        // MSAA causes graphical artifacts with alpha_mode
+        alpha_mode: AlphaMode::Mask(0.5),
         perceptual_roughness: 1.0,
         ..default()
     });
@@ -501,7 +498,8 @@ fn spawn_pbr(
         .insert(RigidBody::Fixed)
         .insert(Collider::from_bevy_mesh(&mesh, &ComputedColliderShape::TriMesh).unwrap())
         // TODO: why chunks doesn't render without NoFrustumCulling ?
-        // .insert(NoFrustumCulling)
+        // this also fixes bad shadows
+        .insert(NoFrustumCulling)
         .insert(ChunkInfo { samples });
 }
 
